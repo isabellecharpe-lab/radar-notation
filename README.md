@@ -12,7 +12,3 @@ Outil web qui compare jusqu'à trois produits notés dans des grilles Excel, sur
 6. Exporter le visuel en PNG ou JPEG.
 
 Les fichiers sont lus dans le navigateur : aucune donnée n'est envoyée sur un serveur.
-
-## Mise en ligne
-
-Le site tient dans un seul fichier, `index.html`. Il est publié avec GitHub Pages (Settings › Pages › Deploy from a branch › `main` / `root`).
