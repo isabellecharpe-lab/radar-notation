@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radar de notation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f4f6f7;font-family:'Nunito Sans',Arial,sans-serif;color:#000;font-weight:300}
+button,input{font-family:inherit}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid #000;outline-offset:2px}
+.file-label:focus-within{outline:3px solid #000;outline-offset:2px}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+header{background:#80b0ce;padding:28px 32px;display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:12px}
+h1{margin:0;font-weight:700;font-size:34px;letter-spacing:-.01em;color:#fff}
+header p{margin:0;font-weight:400;font-size:16px;color:#000}
+h2{margin:0;font-weight:400;color:#55595b}
+.upload{max-width:1180px;margin:0 auto;padding:40px 16px 64px;display:flex;flex-direction:column;gap:32px}
+.cards{display:flex;flex-wrap:wrap;gap:24px}
+.card{flex:1 1 300px;min-width:0;background:#fff;border:1px solid #d5d9db;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:400}
+.text-in{font-weight:300;font-size:16px;padding:12px 14px;border:1px solid #8a8f91;border-radius:8px;min-height:44px;color:#000}
+.file-label{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 16px;border:1.5px dashed #55595b;border-radius:8px;cursor:pointer;font-weight:400;font-size:15px;background:#f7f9fa}
+.ok{background:#eef6dc;border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.err{background:#fff1eb;border:1px solid #ff9a76;border-radius:8px;padding:12px 14px;font-size:14px;line-height:1.45}
+.link{align-self:flex-start;background:none;border:none;padding:10px 0;min-height:44px;text-decoration:underline;cursor:pointer;color:#000;font-size:15px;font-weight:400}
+.primary{font-weight:700;font-size:16px;padding:14px 28px;min-height:48px;border-radius:999px;border:none;cursor:pointer;color:#fff}
+details{background:#fff;border:1px solid #d5d9db;border-radius:12px;padding:20px 24px}
+summary{cursor:pointer;font-weight:400;font-size:17px;color:#55595b}
+.layout{display:flex;flex-wrap:wrap;gap:24px;padding:24px 16px;max-width:1480px;margin:0 auto}
+aside{flex:1 1 240px;max-width:100%;display:flex;flex-direction:column;gap:28px}
+aside section{display:flex;flex-direction:column;gap:10px}
+.prod{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:10px 14px;border-radius:10px;cursor:pointer;text-align:left;font-size:16px;font-weight:400;color:#000}
+.dot{flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:2px solid}
+.row2{display:flex;gap:8px;flex-wrap:wrap}
+.pill{flex:1 1 100px;min-height:44px;padding:8px 12px;border-radius:999px;cursor:pointer;font-size:15px;font-weight:400;border:1.5px solid #000}
+.sq{flex:1 1 100px;min-height:44px;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:15px;font-weight:400;background:#fff;color:#000;border:1.5px solid #000}
+main.radar{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:24px}
+.panel{background:#fff;border-radius:14px;border:1px solid #d5d9db;padding:12px}
+.tablep{padding:20px 24px;display:flex;flex-direction:column;gap:12px}
+.grid{display:grid;gap:8px}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:24px;z-index:50}
+.modal>div{background:#fff;border-radius:14px;padding:24px;max-width:760px;width:100%;max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:16px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+class DCLogic {
+  constructor(props) { this.props = props || {}; this.state = {}; }
+  setState(u) {
+    var patch = typeof u === 'function' ? u(this.state) : u;
+    this.state = Object.assign({}, this.state, patch);
+    if (this.__render) this.__render();
+  }
+}
+</script>
+<script>
+
+var PCOL = ['#80b0ce', '#ff9a76', '#55595b'];
+var PFILL = ['rgba(128,176,206,0.32)', 'rgba(255,154,118,0.32)', 'rgba(85,89,91,0.28)'];
+var CATC = [
+  { fill: '#cee397', wedge: 'rgba(206,227,151,0.28)', fg: '#000000' },
+  { fill: '#ffe87b', wedge: 'rgba(255,232,123,0.28)', fg: '#000000' },
+  { fill: '#679b9b', wedge: 'rgba(103,155,155,0.14)', fg: '#000000' },
+  { fill: '#80b0ce', wedge: 'rgba(128,176,206,0.12)', fg: '#000000' }
+];
+var CX = 520, CY = 455, R = 270;
+
+function txt(v) { return v == null ? '' : String(v).replace(/\s+/g, ' ').trim(); }
+function num(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  var s = txt(v).replace(',', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+  return parseFloat(s);
+}
+function plain(s) { return txt(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function rowsOf(wb, name) { return window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, blankrows: false }); }
+function findSheet(wb, test) {
+  for (var i = 0; i < wb.SheetNames.length; i++) { if (test(plain(wb.SheetNames[i]))) return wb.SheetNames[i]; }
+  return null;
+}
+function isHeader(row) { return row.some(function (c) { return /code|libelle|label|famille|categor|critere|criter|note|score/.test(plain(c)); }) && !row.some(function (c) { return num(c) !== null && plain(c) !== ''; }); }
+function scoreCol(header, rows, minCol) {
+  for (var i = 0; i < header.length; i++) { if (/note|score|rating|valeur|eval|resultat/.test(plain(header[i]))) return i; }
+  var maxLen = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 0);
+  for (var c = minCol; c < maxLen; c++) { if (rows.some(function (r) { return num(r[c]) !== null; })) return c; }
+  return -1;
+}
+
+function parseWorkbook(wb) {
+  var fs = findSheet(wb, function (n) { return /famil|categ/.test(n); });
+  var ss = findSheet(wb, function (n) { return /sous|sub/.test(n); });
+  var cs = findSheet(wb, function (n) { return /crit/.test(n) && !/sous|sub/.test(n); });
+  var cats = [], catMap = {}, crits = [], critMap = {}, product = '';
+  function addCat(key, label) { if (!catMap[key]) { catMap[key] = { key: key, label: label || key }; cats.push(catMap[key]); } return catMap[key]; }
+
+  if (fs && cs && ss) {
+    rowsOf(wb, fs).forEach(function (r, i) {
+      if (i === 0 && isHeader(r)) return;
+      var k = txt(r[0]); if (!k) return; addCat(k, txt(r[1]) || k);
+    });
+    var critDefs = {};
+    rowsOf(wb, cs).forEach(function (r, i) {
+      if (i === 0 && isHeader(r)) return;
+      var k = txt(r[0]); if (!k) return;
+      critDefs[k] = { label: txt(r[1]) || k, cat: txt(r[2]) };
+    });
+    var srows = rowsOf(wb, ss);
+    var header = srows.length && isHeader(srows[0]) ? srows[0] : [];
+    var body = header.length ? srows.slice(1) : srows;
+    var sc = scoreCol(header, body, 3);
+    if (sc < 0) throw new Error('Aucune note trouvée dans la feuille « ' + ss + ' ». Ajoutez une colonne « Note » (1 à 10) après le libellé du sous-critère.');
+    body.forEach(function (r) {
+      var ck = txt(r[0]); var s = num(r[sc]); if (!ck || s === null) return;
+      var def = critDefs[ck] || { label: ck, cat: '' };
+      var cat = addCat(def.cat || '?', def.cat ? (catMap[def.cat] ? catMap[def.cat].label : def.cat) : 'Sans catégorie');
+      if (!critMap[ck]) { critMap[ck] = { key: ck, label: def.label, cat: cat.key, subs: [] }; crits.push(critMap[ck]); }
+      var code = txt(r[1]); var label = txt(r[2]) || code;
+      critMap[ck].subs.push({ key: code || label, code: code, label: label, score: s });
+    });
+  } else {
+    var rows = rowsOf(wb, wb.SheetNames[0]);
+    var h = -1, cc = 0, kc = 1, uc = 2, nc = 3;
+    for (var q = 0; q < Math.min(6, rows.length) && !product; q++) {
+      var rr = rows[q];
+      for (var z = 0; z < rr.length - 1; z++) {
+        if (/^(produit|product|nom du produit)$/.test(plain(rr[z]))) {
+          for (var y = z + 1; y < rr.length; y++) { if (txt(rr[y])) { product = txt(rr[y]); break; } }
+          break;
+        }
+      }
+    }
+    for (var i = 0; i < Math.min(10, rows.length); i++) {
+      var p = rows[i].map(plain);
+      var ci = p.findIndex(function (x) { return /categ|famil/.test(x); });
+      var ki = p.findIndex(function (x) { return /crit/.test(x) && !/sous|sub|nombre/.test(x); });
+      var ui = p.findIndex(function (x) { return /sous|sub/.test(x) && !/nombre/.test(x); });
+      var ni = p.findIndex(function (x) { return /^(note|score|rating|valeur)/.test(x) && !/global|moyenne/.test(x); });
+      if (ci > -1 && ki > -1 && ui > -1 && ni > -1) { h = i; cc = ci; kc = ki; uc = ui; nc = ni; break; }
+    }
+    var lastC = '', lastK = '';
+    rows.slice(h + 1).forEach(function (r) {
+      var c = txt(r[cc]) || lastC, k = txt(r[kc]) || lastK; lastC = c; lastK = k;
+      var s = num(r[nc]); if (!k || s === null) return;
+      var cat = addCat(c || 'Sans catégorie', c || 'Sans catégorie');
+      var kp = splitCode(k), ck = (kp.code || kp.label).toLowerCase();
+      if (!critMap[ck]) { critMap[ck] = { key: ck, label: kp.label, cat: cat.key, subs: [] }; crits.push(critMap[ck]); }
+      var sl = uc > -1 ? txt(r[uc]) : ''; sl = sl || k;
+      var sp = splitCode(sl);
+      critMap[ck].subs.push({ key: (sp.code || sp.label).toLowerCase(), code: sp.code, label: sp.label, score: s });
+    });
+  }
+  if (!crits.length) throw new Error('Aucune note exploitable trouvée. Vérifiez que le fichier contient une colonne de notes de 1 à 10.');
+  var usedCats = cats.filter(function (c) { return crits.some(function (k) { return k.cat === c.key; }); });
+  var nsub = crits.reduce(function (n, c) { return n + c.subs.length; }, 0);
+  return { cats: usedCats, crits: crits, nsub: nsub, product: product };
+}
+function splitCode(s) {
+  var m = /^\s*(\d+(?:\.\d+)*)\s*[-–.):]\s*(.+)$/.exec(s);
+  return m ? { code: m[1], label: m[2].trim() } : { code: '', label: s };
+}
+
+function wrap(s, max, maxLines) {
+  var words = s.split(' '), lines = [], cur = '';
+  words.forEach(function (w) {
+    var t = cur ? cur + ' ' + w : w;
+    if (t.length > max && cur) { lines.push(cur); cur = w; } else { cur = t; }
+  });
+  if (cur) lines.push(cur);
+  if (lines.length > maxLines) { lines = lines.slice(0, maxLines); lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*\S{0,2}$/, '') + '…'; }
+  return lines;
+}
+function pt(r, a) { return [CX + r * Math.cos(a), CY + r * Math.sin(a)]; }
+function f1(n) { return Math.round(n * 10) / 10; }
+function fmt(n) { return n == null ? 'n/a' : (Math.round(n * 10) / 10).toFixed(1).replace('.', ','); }
+function tref(t) { return function (el) { if (el && el.textContent !== String(t)) el.textContent = String(t); }; }
+function addRef(list, key, rk) { (list || []).forEach(function (o) { o[rk || 'r'] = tref(o[key]); }); }
+function P(r, a) { var p = pt(r, a); return f1(p[0]) + ' ' + f1(p[1]); }
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      screen: 'upload', mode: 'simple', visible: [true, true, true],
+      slots: [0, 1, 2].map(function () { return { name: '', fileName: '', data: null, error: '', loading: false }; }),
+      exportUrl: '', exportName: '', exportLabel: ''
+    };
+    this.svgEl = null;
+  }
+  setSlot(i, patch) {
+    this.setState(function (st) { var s = st.slots.slice(); s[i] = Object.assign({}, s[i], patch); return { slots: s }; });
+  }
+  readFile(i, e) {
+    var f = e.target.files && e.target.files[0]; var self = this;
+    if (!f) return;
+    self.setSlot(i, { fileName: f.name, error: '', data: null, loading: true });
+    var rd = new FileReader();
+    rd.onload = function () {
+      try {
+        if (!window.XLSX) throw new Error('Le lecteur Excel ne s’est pas chargé. Rechargez la page puis réessayez.');
+        var wb = window.XLSX.read(new Uint8Array(rd.result), { type: 'array' });
+        var d = parseWorkbook(wb), cur = self.state.slots[i];
+        self.setSlot(i, (txt(cur.name) || !d.product) ? { data: d, loading: false } : { data: d, loading: false, name: d.product });
+      } catch (err) { self.setSlot(i, { error: 'Lecture impossible : ' + (err && err.message ? err.message : err), loading: false }); }
+    };
+    rd.onerror = function () { self.setSlot(i, { error: 'Le fichier n’a pas pu être lu.', loading: false }); };
+    rd.readAsArrayBuffer(f);
+    try { e.target.value = ''; } catch (x) {}
+  }
+  ready() { return this.state.slots.map(function (s, i) { return { s: s, i: i }; }).filter(function (o) { return o.s.data && txt(o.s.name); }); }
+
+  doExport(type) {
+    var svg = this.svgEl || document.querySelector('svg[data-radar]');
+    if (!svg) return;
+    var self = this;
+    var clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    var H2 = 2 * (self.svgH || 930);
+    clone.setAttribute('width', '2080'); clone.setAttribute('height', String(H2));
+    clone.removeAttribute('style');
+    clone.setAttribute('font-family', 'Nunito Sans, Arial, sans-serif');
+    var src = new XMLSerializer().serializeToString(clone);
+    var img = new Image();
+    img.onload = function () {
+      var c = document.createElement('canvas'); c.width = 2080; c.height = H2;
+      var ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      var mime = type === 'png' ? 'image/png' : 'image/jpeg';
+      var url = c.toDataURL(mime, 0.92);
+      var name = 'radar-' + (self.state.mode === 'simple' ? 'simple' : 'detaille') + '.' + (type === 'png' ? 'png' : 'jpg');
+      self.setState({ exportUrl: url, exportName: name, exportLabel: type === 'png' ? 'PNG' : 'JPEG' });
+      self.download(url, name);
+    };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src);
+  }
+  download(url, name) {
+    try { var a = document.createElement('a'); a.href = url; a.download = name; a.style.display = 'none'; document.body.appendChild(a); a.click(); a.remove(); } catch (e) {}
+  }
+
+  buildModel(ready) {
+    var cats = [], catMap = {}, crits = [], critMap = {};
+    ready.forEach(function (o) {
+      var d = o.s.data;
+      d.cats.forEach(function (c) { if (!catMap[c.key]) { catMap[c.key] = { key: c.key, label: c.label, crits: [] }; cats.push(catMap[c.key]); } });
+      d.crits.forEach(function (k) {
+        if (!critMap[k.key]) { critMap[k.key] = { key: k.key, label: k.label, cat: k.cat, subs: [], subMap: {} }; catMap[k.cat].crits.push(critMap[k.key]); }
+        var C = critMap[k.key];
+        k.subs.forEach(function (s) { if (!C.subMap[s.key]) { C.subMap[s.key] = { key: s.key, code: s.code, label: s.label }; C.subs.push(C.subMap[s.key]); } });
+      });
+    });
+    cats.forEach(function (c) { c.crits.forEach(function (k) { crits.push(k); }); });
+    var scores = {};
+    ready.forEach(function (o) {
+      var m = {};
+      o.s.data.crits.forEach(function (k) {
+        var sm = {}; var sum = 0;
+        k.subs.forEach(function (s) { sm[s.key] = s.score; sum += s.score; });
+        m[k.key] = { subs: sm, avg: k.subs.length ? sum / k.subs.length : null };
+      });
+      scores[o.i] = m;
+    });
+    return { cats: cats, crits: crits, scores: scores };
+  }
+
+  renderVals() {
+    var self = this, st = this.state;
+    var ready = this.ready();
+    var slots = st.slots.map(function (s, i) {
+      return {
+        i: i, n: i + 1, color: PCOL[i], name: s.name, fileName: s.fileName,
+        fileButton: s.fileName ? 'Remplacer le fichier' : 'Choisir un fichier Excel',
+        loading: !!s.loading, hasData: !!s.data, hasError: !!s.error, error: s.error,
+        needsName: !!s.data && !txt(s.name),
+        canClear: !!(s.data || s.error || s.name),
+        summary: s.data ? (s.data.cats.length + ' catégories · ' + s.data.crits.length + ' critères · ' + s.data.nsub + ' sous-critères notés') : '',
+        onName: function (e) { self.setSlot(i, { name: e.target.value }); },
+        onFile: function (e) { self.readFile(i, e); },
+        onClear: function () { self.setSlot(i, { name: '', fileName: '', data: null, error: '', loading: false }); }
+      };
+    });
+    var cannotGo = ready.length === 0;
+    var base = {
+      isUpload: st.screen !== 'radar', isRadar: st.screen === 'radar',
+      stepLabel: st.screen === 'radar' ? 'Étape 2 · Lecture des notes' : 'Étape 1 · Import des grilles',
+      slots: slots, cannotGo: cannotGo, goBg: cannotGo ? '#8a8f91' : '#000000',
+      goHint: cannotGo ? 'Ajoutez au moins un fichier noté et son nom de produit.' : (ready.length + ' produit' + (ready.length > 1 ? 's' : '') + ' prêt' + (ready.length > 1 ? 's' : '') + '.'),
+      goRadar: function () { if (self.ready().length) self.setState({ screen: 'radar' }); },
+      goUpload: function () { self.setState({ screen: 'upload' }); },
+      hasExport: !!st.exportUrl, exportUrl: st.exportUrl, exportLabel: st.exportLabel,
+      closeExport: function () { self.setState({ exportUrl: '' }); },
+      redownload: function () { self.download(st.exportUrl, st.exportName); },
+      setSvg: function (el) { self.svgEl = el; },
+      exportPng: function () { self.doExport('png'); },
+      exportJpg: function () { self.doExport('jpg'); }
+    };
+    var detailed = st.mode === 'detailed';
+    base.setSimple = function () { self.setState({ mode: 'simple' }); };
+    base.setDetailed = function () { self.setState({ mode: 'detailed' }); };
+    base.simplePressed = detailed ? 'false' : 'true';
+    base.detailedPressed = detailed ? 'true' : 'false';
+    base.simpleBg = detailed ? '#ffffff' : '#000000'; base.simpleFg = detailed ? '#000000' : '#ffffff';
+    base.detailedBg = detailed ? '#000000' : '#ffffff'; base.detailedFg = detailed ? '#ffffff' : '#000000';
+    base.modeHelp = detailed ? 'Chaque critère est découpé en sous-critères : toutes les notes sont tracées, sans moyenne.' : 'Un point par critère : la moyenne de ses sous-critères.';
+    base.svgTitle = detailed ? 'Mode détaillé · notes des sous-critères' : 'Mode simple · moyenne par critère';
+
+    var model = this.buildModel(ready);
+    var vis = ready.filter(function (o) { return st.visible[o.i]; });
+    base.products = ready.map(function (o) {
+      var on = !!st.visible[o.i];
+      return {
+        name: txt(o.s.name), color: PCOL[o.i], dot: on ? PCOL[o.i] : '#ffffff', pressed: on ? 'true' : 'false',
+        bg: on ? '#f4f6f7' : '#ffffff', border: on ? PCOL[o.i] : '#d5d9db', state: on ? 'affiché' : 'masqué',
+        toggle: function () { self.setState(function (s2) { var v = s2.visible.slice(); v[o.i] = !v[o.i]; return { visible: v }; }); }
+      };
+    });
+
+    var N = model.crits.length || 1, sector = 2 * Math.PI / N, a0 = -Math.PI / 2;
+    model.crits.forEach(function (k, i) {
+      k.a = a0 + i * sector; k.lo = k.a - sector / 2; k.hi = k.a + sector / 2;
+      k.subs.forEach(function (s, j) { s.a = detailed ? k.lo + (j + 0.5) * sector / k.subs.length : k.a; });
+    });
+
+    var wedges = [], bands = [], legendCats = [];
+    model.cats.forEach(function (c, ci) {
+      if (!c.crits.length) return;
+      var col = CATC[ci % CATC.length];
+      var lo = c.crits[0].lo, hi = c.crits[c.crits.length - 1].hi;
+      if (hi - lo > 2 * Math.PI - 0.02) hi = lo + 2 * Math.PI - 0.02;
+      var large = hi - lo > Math.PI ? 1 : 0;
+      wedges.push({ d: 'M ' + CX + ' ' + CY + ' L ' + P(R, lo) + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + P(R, hi) + ' Z', fill: col.wedge });
+      var g = 0.012, l2 = lo + g, h2 = hi - g, r1 = R + 26, r2 = R + 58, rt = R + 42;
+      var d = 'M ' + P(r2, l2) + ' A ' + r2 + ' ' + r2 + ' 0 ' + large + ' 1 ' + P(r2, h2) + ' L ' + P(r1, h2) + ' A ' + r1 + ' ' + r1 + ' 0 ' + large + ' 0 ' + P(r1, l2) + ' Z';
+      var mid = (lo + hi) / 2, bottom = Math.sin(mid) > 0.05;
+      var tp = bottom ? 'M ' + P(rt, h2) + ' A ' + rt + ' ' + rt + ' 0 ' + large + ' 0 ' + P(rt, l2) : 'M ' + P(rt, l2) + ' A ' + rt + ' ' + rt + ' 0 ' + large + ' 1 ' + P(rt, h2);
+      var maxC = Math.max(4, Math.floor(rt * (h2 - l2) / 8.2));
+      var lab = c.label.length > maxC ? c.label.slice(0, maxC - 1).trim() + '…' : c.label;
+      bands.push({ d: d, fill: col.fill, fg: col.fg, tp: tp, pid: 'catarc-' + ci, label: lab, full: c.label });
+      legendCats.push({ label: c.label, fill: col.fill, stroke: col.fill });
+    });
+    base.wedges = wedges; base.bands = bands;
+
+    var rings = [];
+    for (var k = 1; k <= 10; k++) rings.push({ r: R * k / 10, w: k === 10 ? 1.5 : 1, op: k === 10 ? 0.7 : (k % 2 === 0 ? 0.35 : 0.15) });
+    base.rings = rings;
+    base.ringLabels = [2, 4, 6, 8, 10].map(function (v) { var p = pt(R * v / 10, a0 + sector / 2 - 0.02); return { x: f1(p[0] + 4), y: f1(p[1] - 3), t: String(v) }; });
+
+    var spokes = [], subTicks = [];
+    var catFirst = {}; model.cats.forEach(function (c) { if (c.crits.length) catFirst[c.crits[0].key] = true; });
+    model.crits.forEach(function (k) {
+      var b = pt(catFirst[k.key] && model.cats.length > 1 ? R + 58 : R, k.lo);
+      var isCatEdge = catFirst[k.key] && model.cats.length > 1;
+      spokes.push({ x1: CX, y1: CY, x2: f1(b[0]), y2: f1(b[1]), color: isCatEdge ? '#000000' : '#55595b', w: isCatEdge ? 2 : 1.2, dash: 'none', op: isCatEdge ? 0.75 : 0.45 });
+      if (detailed) {
+        k.subs.forEach(function (s, j) {
+          var e = pt(R, s.a);
+          spokes.push({ x1: CX, y1: CY, x2: f1(e[0]), y2: f1(e[1]), color: '#55595b', w: 1, dash: '3 4', op: 0.45 });
+          var t = pt(R + 13, s.a);
+          subTicks.push({ x: f1(t[0]), y: f1(t[1]), t: s.code || String.fromCharCode(97 + j), full: (s.code ? s.code + ' ' : '') + s.label });
+        });
+      } else {
+        var e2 = pt(R, k.a);
+        spokes.push({ x1: CX, y1: CY, x2: f1(e2[0]), y2: f1(e2[1]), color: '#55595b', w: 1, dash: '3 4', op: 0.55 });
+      }
+    });
+    base.spokes = spokes; base.subTicks = subTicks;
+
+    var critLines = [];
+    model.crits.forEach(function (k, i) {
+      var p = pt(R + 76, k.a), cs = Math.cos(k.a), sn = Math.sin(k.a);
+      var anchor = cs > 0.25 ? 'start' : (cs < -0.25 ? 'end' : 'middle');
+      var lines = wrap((i + 1) + '. ' + k.label, anchor === 'middle' ? 30 : 22, 3), lh = 18, y0;
+      if (sn < -0.6) y0 = p[1] - (lines.length - 1) * lh;
+      else if (sn > 0.6) y0 = p[1] + 12;
+      else y0 = p[1] - (lines.length - 1) * lh / 2 + 5;
+      lines.forEach(function (t, j) { critLines.push({ x: f1(p[0]), y: f1(y0 + j * lh), t: t, anchor: anchor }); });
+    });
+    base.critLines = critLines;
+
+    var shapes = [], dots = [];
+    vis.forEach(function (o) {
+      var sc = model.scores[o.i], pts = [], name = txt(o.s.name);
+      model.crits.forEach(function (k) {
+        var ks = sc[k.key]; if (!ks) return;
+        if (!detailed) {
+          if (ks.avg == null) return;
+          var p = pt(R * Math.min(10, Math.max(0, ks.avg)) / 10, k.a); pts.push(p);
+          dots.push({ x: f1(p[0]), y: f1(p[1]), r: 5, color: PCOL[o.i], tip: name + ' · ' + k.label + ' : ' + fmt(ks.avg) + ' / 10' });
+        } else {
+          k.subs.forEach(function (s) {
+            var v = ks.subs[s.key]; if (v == null) return;
+            var p2 = pt(R * Math.min(10, Math.max(0, v)) / 10, s.a); pts.push(p2);
+            dots.push({ x: f1(p2[0]), y: f1(p2[1]), r: 4, color: PCOL[o.i], tip: name + ' · ' + (s.code ? s.code + ' ' : '') + s.label + ' : ' + fmt(v) + ' / 10' });
+          });
+        }
+      });
+      if (pts.length > 1) shapes.push({ points: pts.map(function (p) { return f1(p[0]) + ',' + f1(p[1]); }).join(' '), color: PCOL[o.i], fill: PFILL[o.i] });
+    });
+    base.shapes = shapes; base.dots = dots;
+
+    var lt = [], lr = [], ly = 872;
+    base.sepY = ly;
+    ly += 38;
+    lt.push({ x: 32, y: ly, t: 'Produits', size: 16, weight: 700, fill: '#55595b' });
+    var lx = 150;
+    vis.forEach(function (o) {
+      var n = txt(o.s.name); if (n.length > 26) n = n.slice(0, 25) + '…';
+      lr.push({ x: lx, y: ly - 13, rx: 8, fill: PFILL[o.i], stroke: PCOL[o.i] });
+      lt.push({ x: lx + 24, y: ly, t: n, size: 15, weight: 400, fill: '#000000' });
+      lx += 24 + n.length * 8 + 36;
+    });
+    if (!vis.length) lt.push({ x: lx, y: ly, t: 'Aucun produit affiché', size: 15, weight: 300, fill: '#000000' });
+    ly += 44;
+    lt.push({ x: 32, y: ly, t: 'Familles et critères', size: 16, weight: 700, fill: '#55595b' });
+    ly += 34;
+    var catsU = model.cats.filter(function (c) { return c.crits.length; });
+    var ncol = Math.max(1, Math.min(3, catsU.length)), gap = 28;
+    var colW = (1040 - 64 - (ncol - 1) * gap) / ncol, maxCh = Math.max(16, Math.floor((colW - 24) / 7.3));
+    for (var g0 = 0; g0 < catsU.length; g0 += ncol) {
+      var bottom = ly;
+      catsU.slice(g0, g0 + ncol).forEach(function (c, cI) {
+        var ci = model.cats.indexOf(c), col = CATC[ci % CATC.length];
+        var x0 = 32 + cI * (colW + gap), yy = ly;
+        lr.push({ x: x0, y: yy - 13, rx: 3, fill: col.fill, stroke: col.fill });
+        wrap(c.label, maxCh - 2, 2).forEach(function (t) { lt.push({ x: x0 + 24, y: yy, t: t, size: 15, weight: 700, fill: '#000000' }); yy += 19; });
+        yy += 6;
+        c.crits.forEach(function (k) {
+          var idx = model.crits.indexOf(k) + 1;
+          wrap(idx + '. ' + k.label, maxCh, 3).forEach(function (t, j) { lt.push({ x: x0 + 24 + (j ? 16 : 0), y: yy, t: t, size: 14, weight: 300, fill: '#000000' }); yy += 18; });
+          yy += 5;
+        });
+        bottom = Math.max(bottom, yy);
+      });
+      ly = bottom + 18;
+    }
+    base.legendRects = lr;
+    base.legTitles = lt.filter(function (o) { return o.size === 16; }).map(function (o) { return { x: o.x, y: o.y, t: o.t }; });
+    base.legBold = lt.filter(function (o) { return o.size === 15 && o.weight === 700; }).map(function (o) { return { x: o.x, y: o.y, t: o.t }; });
+    base.legNormal = lt.filter(function (o) { return o.size === 15 && o.weight !== 700; }).map(function (o) { return { x: o.x, y: o.y, t: o.t }; });
+    base.legLight = lt.filter(function (o) { return o.size === 14; }).map(function (o) { return { x: o.x, y: o.y, t: o.t }; });
+    base.svgH = Math.ceil(ly + 6);
+    this.svgH = base.svgH;
+    base.radarAria = 'Radar à ' + model.crits.length + ' axes, ' + (detailed ? 'notes par sous-critère' : 'moyenne par critère') + ', produits affichés : ' + (vis.map(function (o) { return txt(o.s.name); }).join(', ') || 'aucun');
+
+    base.cols = 'minmax(220px, 1fr) repeat(' + Math.max(1, vis.length) + ', minmax(72px, 110px))';
+    base.headCells = vis.length ? vis.map(function (o) { return { name: txt(o.s.name), color: PCOL[o.i] }; }) : [{ name: 'Aucun produit affiché', color: '#ffffff' }];
+    var rows = [];
+    model.cats.forEach(function (c, ci) {
+      rows.push({ isCat: true, isCrit: false, isSub: false, label: c.label, swatch: CATC[ci % CATC.length].fill, cells: [] });
+      c.crits.forEach(function (k) {
+        var idx = model.crits.indexOf(k) + 1;
+        rows.push({ isCat: false, isCrit: true, isSub: false, label: idx + '. ' + k.label, cells: vis.map(function (o) { var ks = model.scores[o.i][k.key]; return { v: fmt(ks ? ks.avg : null) }; }) });
+        if (detailed) k.subs.forEach(function (s, j) {
+          rows.push({ isCat: false, isCrit: false, isSub: true, label: (s.code || String.fromCharCode(97 + j)) + ' · ' + s.label, cells: vis.map(function (o) { var ks = model.scores[o.i][k.key]; return { v: fmt(ks ? ks.subs[s.key] : null) }; }) });
+        });
+      });
+    });
+    base.rows = rows;
+    ['ringLabels', 'subTicks', 'critLines', 'legTitles', 'legBold', 'legNormal', 'legLight'].forEach(function (k) { addRef(base[k], 't'); });
+    addRef(base.bands, 'label', 'labelRef'); addRef(base.bands, 'full', 'fullRef'); addRef(base.dots, 'tip', 'tipRef');
+    base.svgTitleRef = tref(base.svgTitle);
+    return base;
+  }
+}
+
+</script>
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var comp = new Component({});
+  var H = [];
+  function on(fn) { H.push(fn); return H.length - 1; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function each(list, f) { return (list || []).map(f).join(''); }
+
+  function uploadView(v) {
+    return '<main class="upload">' +
+      '<div style="display:flex;flex-direction:column;gap:8px"><h2 style="font-size:24px">Chargez jusqu’à trois grilles de notation</h2>' +
+      '<p style="margin:0;font-size:16px;line-height:1.5;max-width:760px">Un fichier Excel par produit, et un nom pour chacun. Le nom apparaîtra sur le bouton qui affiche ou masque son radar.</p></div>' +
+      '<div class="cards">' + each(v.slots, function (s) {
+        return '<section class="card">' +
+          '<div style="display:flex;align-items:center;gap:10px"><span aria-hidden="true" style="width:14px;height:14px;border-radius:50%;background:' + s.color + '"></span><h3 style="margin:0;font-weight:400;font-size:18px;color:#55595b">Produit ' + s.n + '</h3></div>' +
+          '<div class="field"><label for="name-' + s.i + '">Nom du produit</label><input class="text-in" id="name-' + s.i + '" type="text" value="' + esc(s.name) + '" placeholder="Nom affiché sur le radar" data-input="' + on(s.onName) + '"></div>' +
+          '<div class="field"><span>Fichier de notation</span><label class="file-label">' +
+          '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>' +
+          '<span>' + esc(s.fileButton) + '</span><input class="vh" type="file" accept=".xlsx,.xlsm,.xls,.ods,.csv" data-change="' + on(s.onFile) + '"></label></div>' +
+          (s.loading ? '<p style="margin:0;font-size:14px">Lecture du fichier…</p>' : '') +
+          (s.hasData ? '<div class="ok"><span style="font-weight:400">' + esc(s.fileName) + '</span><span>' + esc(s.summary) + '</span></div>' : '') +
+          (s.hasError ? '<div class="err" role="alert">' + esc(s.error) + '</div>' : '') +
+          (s.needsName ? '<p style="margin:0;font-size:14px">Saisissez un nom pour ce produit.</p>' : '') +
+          (s.canClear ? '<button type="button" class="link" style="font-size:14px" data-click="' + on(s.onClear) + '">Retirer ce produit</button>' : '') +
+          '</section>';
+      }) + '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px"><button type="button" class="primary" style="background:' + v.goBg + '"' + (v.cannotGo ? ' disabled' : '') + ' data-click="' + on(v.goRadar) + '">Afficher le radar</button><span style="font-size:15px">' + esc(v.goHint) + '</span></div>' +
+      '<details><summary>Format attendu du fichier</summary><div style="display:flex;flex-direction:column;gap:10px;padding-top:14px;font-size:15px;line-height:1.55">' +
+      '<p style="margin:0">Le format « NOTE_FINALE » est reconnu directement : une ligne d’en-tête Famille, Critère, Sous-critère, Coefficient, Note /10, puis une ligne par sous-critère. Le nom indiqué en face de « Produit » pré-remplit le nom du produit.</p>' +
+      '<p style="margin:0">Un classeur à trois feuilles (Famille, Critères, Sous-Critère, avec une colonne Note) fonctionne aussi.</p></div></details>' +
+      '</main>';
+  }
+
+  function svgView(v) {
+    var o = '<svg data-radar="1" viewBox="0 0 1040 ' + v.svgH + '" width="100%" role="img" aria-label="' + esc(v.radarAria) + '" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;font-family:\'Nunito Sans\',Arial,sans-serif">';
+    o += '<rect x="0" y="0" width="1040" height="' + v.svgH + '" fill="#ffffff"/>';
+    o += '<text x="32" y="40" fill="#55595b" font-size="15" font-weight="400">' + esc(v.svgTitle) + '</text>';
+    o += each(v.wedges, function (w) { return '<path d="' + w.d + '" fill="' + w.fill + '"/>'; });
+    o += each(v.rings, function (r) { return '<circle cx="520" cy="455" r="' + r.r + '" fill="none" stroke="#55595b" stroke-width="' + r.w + '" opacity="' + r.op + '"/>'; });
+    o += each(v.spokes, function (l) { return '<line x1="' + l.x1 + '" y1="' + l.y1 + '" x2="' + l.x2 + '" y2="' + l.y2 + '" stroke="' + l.color + '" stroke-width="' + l.w + '"' + (l.dash !== 'none' ? ' stroke-dasharray="' + l.dash + '"' : '') + ' opacity="' + l.op + '"/>'; });
+    o += each(v.bands, function (b) {
+      return '<path d="' + b.d + '" fill="' + b.fill + '" stroke="#ffffff"><title>' + esc(b.full) + '</title></path>' +
+        '<path id="' + b.pid + '" d="' + b.tp + '" fill="none" stroke="none"/>' +
+        '<text fill="' + b.fg + '" font-size="14" font-weight="700" dominant-baseline="central"><textPath href="#' + b.pid + '" startOffset="50%" text-anchor="middle">' + esc(b.label) + '</textPath></text>';
+    });
+    o += each(v.ringLabels, function (t) { return '<text x="' + t.x + '" y="' + t.y + '" fill="#55595b" font-size="12" font-weight="400">' + esc(t.t) + '</text>'; });
+    o += each(v.subTicks, function (t) { return '<text x="' + t.x + '" y="' + t.y + '" fill="#55595b" font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="central"><title>' + esc(t.full) + '</title>' + esc(t.t) + '</text>'; });
+    o += each(v.shapes, function (s) { return '<polygon points="' + s.points + '" fill="' + s.fill + '" stroke="' + s.color + '" stroke-width="2.5" stroke-linejoin="round"/>'; });
+    o += each(v.dots, function (d) { return '<circle cx="' + d.x + '" cy="' + d.y + '" r="' + d.r + '" fill="' + d.color + '" stroke="#ffffff" stroke-width="1.5"><title>' + esc(d.tip) + '</title></circle>'; });
+    o += each(v.critLines, function (c) { return '<text x="' + c.x + '" y="' + c.y + '" fill="#000000" font-size="15" font-weight="400" text-anchor="' + c.anchor + '">' + esc(c.t) + '</text>'; });
+    o += '<line x1="32" y1="' + v.sepY + '" x2="1008" y2="' + v.sepY + '" stroke="#d5d9db" stroke-width="1"/>';
+    o += each(v.legendRects, function (g) { return '<rect x="' + g.x + '" y="' + g.y + '" width="16" height="16" rx="' + g.rx + '" fill="' + g.fill + '" stroke="' + g.stroke + '" stroke-width="2"/>'; });
+    function txt(list, fill, size, weight) { return each(list, function (t) { return '<text x="' + t.x + '" y="' + t.y + '" fill="' + fill + '" font-size="' + size + '" font-weight="' + weight + '">' + esc(t.t) + '</text>'; }); }
+    o += txt(v.legTitles, '#55595b', 16, 700) + txt(v.legBold, '#000000', 15, 700) + txt(v.legNormal, '#000000', 15, 400) + txt(v.legLight, '#000000', 14, 300);
+    return o + '</svg>';
+  }
+
+  function radarView(v) {
+    var o = '<div class="layout"><aside>';
+    o += '<section><h2 style="font-size:18px">Produits</h2>' + each(v.products, function (p) {
+      return '<button type="button" class="prod" aria-pressed="' + p.pressed + '" style="background:' + p.bg + ';border:2px solid ' + p.border + '" data-click="' + on(p.toggle) + '">' +
+        '<span class="dot" aria-hidden="true" style="background:' + p.dot + ';border-color:' + p.color + '"></span>' +
+        '<span style="flex:1 1 auto;min-width:0;overflow-wrap:anywhere">' + esc(p.name) + '</span><span style="font-weight:300;font-size:13px">' + p.state + '</span></button>';
+    }) + '</section>';
+    o += '<section><h2 style="font-size:18px">Affichage</h2><div class="row2">' +
+      '<button type="button" class="pill" aria-pressed="' + v.simplePressed + '" style="background:' + v.simpleBg + ';color:' + v.simpleFg + '" data-click="' + on(v.setSimple) + '">Simple</button>' +
+      '<button type="button" class="pill" aria-pressed="' + v.detailedPressed + '" style="background:' + v.detailedBg + ';color:' + v.detailedFg + '" data-click="' + on(v.setDetailed) + '">Détaillé</button></div>' +
+      '<p style="margin:0;font-size:14px;line-height:1.45">' + esc(v.modeHelp) + '</p></section>';
+    o += '<section><h2 style="font-size:18px">Télécharger le visuel</h2><div class="row2">' +
+      '<button type="button" class="sq" data-click="' + on(v.exportPng) + '">PNG</button><button type="button" class="sq" data-click="' + on(v.exportJpg) + '">JPEG</button></div></section>';
+    o += '<button type="button" class="link" data-click="' + on(v.goUpload) + '">Modifier les fichiers</button></aside>';
+    o += '<main class="radar"><div class="panel">' + svgView(v) + '</div>';
+    o += '<div class="panel tablep"><h2 style="font-size:20px">Détail des notes</h2><div style="overflow-x:auto"><div style="min-width:520px;display:flex;flex-direction:column">';
+    o += '<div class="grid" style="grid-template-columns:' + v.cols + ';padding:8px 0;border-bottom:2px solid #000"><span style="font-weight:400;font-size:14px;color:#55595b">Catégorie · critère · sous-critère</span>' +
+      each(v.headCells, function (h) { return '<span style="font-weight:400;font-size:14px;display:flex;justify-content:flex-end;align-items:center;gap:6px;overflow-wrap:anywhere"><span aria-hidden="true" style="flex:0 0 auto;width:10px;height:10px;border-radius:50%;background:' + h.color + '"></span>' + esc(h.name) + '</span>'; }) + '</div>';
+    o += each(v.rows, function (r) {
+      if (r.isCat) return '<div style="display:flex;align-items:center;gap:10px;padding:14px 0 6px"><span aria-hidden="true" style="width:14px;height:14px;border-radius:3px;background:' + r.swatch + '"></span><span style="font-weight:700;font-size:15px">' + esc(r.label) + '</span></div>';
+      var crit = r.isCrit;
+      return '<div class="grid" style="grid-template-columns:' + v.cols + ';padding:' + (crit ? '8px 0;border-top:1px solid #e3e6e7' : '4px 0') + '">' +
+        '<span style="font-weight:' + (crit ? 400 : 300) + ';font-size:' + (crit ? 15 : 14) + 'px;padding-left:' + (crit ? 24 : 48) + 'px;line-height:1.4">' + esc(r.label) + '</span>' +
+        each(r.cells, function (c) { return '<span class="num" style="font-weight:' + (crit ? 400 : 300) + ';font-size:' + (crit ? 15 : 14) + 'px">' + esc(c.v) + '</span>'; }) + '</div>';
+    });
+    o += '</div></div><p style="margin:0;font-size:13px;color:#55595b">Note d’un critère = moyenne simple de ses sous-critères. « n/a » : sous-critère absent du fichier de ce produit.</p></div></main></div>';
+    return o;
+  }
+
+  function render() {
+    var focus = document.activeElement, fid = focus && focus.id, sel = null;
+    if (fid && focus.setSelectionRange) sel = [focus.selectionStart, focus.selectionEnd];
+    H = [];
+    var v = comp.renderVals();
+    var html = '<header><h1>Radar de notation</h1><p>' + esc(v.stepLabel) + '</p></header>' + (v.isRadar ? radarView(v) : uploadView(v));
+    if (v.hasExport) {
+      html += '<div class="modal"><div role="dialog" aria-modal="true" aria-label="Aperçu de l’export"><h2 style="font-size:20px">Visuel prêt · ' + esc(v.exportLabel) + '</h2>' +
+        '<img src="' + v.exportUrl + '" alt="Radar exporté" style="width:100%;height:auto;border:1px solid #d5d9db;border-radius:8px">' +
+        '<p style="margin:0;font-size:14px;line-height:1.45">Si le téléchargement ne démarre pas, faites un clic droit sur l’image puis « Enregistrer l’image sous ».</p>' +
+        '<div class="row2"><button type="button" class="primary" style="background:#000;font-size:15px;flex:0 0 auto" data-click="' + on(v.redownload) + '">Télécharger</button>' +
+        '<button type="button" class="sq" style="flex:0 0 auto;border-radius:999px;padding:10px 22px" data-click="' + on(v.closeExport) + '">Fermer</button></div></div></div>';
+    }
+    app.innerHTML = html;
+    comp.svgEl = app.querySelector('svg[data-radar]');
+    if (fid) {
+      var el = document.getElementById(fid);
+      if (el) { el.focus(); if (sel && el.setSelectionRange) el.setSelectionRange(sel[0], sel[1]); }
+    }
+  }
+  app.addEventListener('click', function (e) { var t = e.target.closest('[data-click]'); if (t && !t.disabled) H[+t.getAttribute('data-click')](e); });
+  app.addEventListener('input', function (e) { var a = e.target.getAttribute('data-input'); if (a != null) H[+a](e); });
+  app.addEventListener('change', function (e) { var a = e.target.getAttribute('data-change'); if (a != null) H[+a](e); });
+  comp.__render = render;
+  render();
+})();
+</script>
+</body>
+</html>
