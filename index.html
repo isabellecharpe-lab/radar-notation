@@ -32,7 +32,7 @@ h2{margin:0;font-weight:400;color:#55595b}
 details{background:#fff;border:1px solid #d5d9db;border-radius:12px;padding:20px 24px}
 summary{cursor:pointer;font-weight:400;font-size:17px;color:#55595b}
 .layout{display:flex;flex-wrap:wrap;gap:24px;padding:24px 16px;max-width:1480px;margin:0 auto}
-aside{flex:1 1 240px;max-width:100%;display:flex;flex-direction:column;gap:28px}
+aside{flex:1 1 310px;max-width:100%;display:flex;flex-direction:column;gap:28px}
 aside section{display:flex;flex-direction:column;gap:10px}
 .prod{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:10px 14px;border-radius:10px;cursor:pointer;text-align:left;font-size:16px;font-weight:400;color:#000}
 .dot{flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:2px solid}
@@ -97,7 +97,7 @@ function parseWorkbook(wb) {
   var fs = findSheet(wb, function (n) { return /famil|categ/.test(n); });
   var ss = findSheet(wb, function (n) { return /sous|sub/.test(n); });
   var cs = findSheet(wb, function (n) { return /crit/.test(n) && !/sous|sub/.test(n); });
-  var cats = [], catMap = {}, crits = [], critMap = {}, product = '';
+  var cats = [], catMap = {}, crits = [], critMap = {}, product = '', fileNote = null;
   function addCat(key, label) { if (!catMap[key]) { catMap[key] = { key: key, label: label || key }; cats.push(catMap[key]); } return catMap[key]; }
 
   if (fs && cs && ss) {
@@ -126,6 +126,18 @@ function parseWorkbook(wb) {
     });
   } else {
     var rows = rowsOf(wb, wb.SheetNames[0]);
+    for (var q2 = 0; q2 < Math.min(8, rows.length); q2++) {
+      var r2 = rows[q2];
+      for (var z2 = 0; z2 < r2.length; z2++) {
+        var lab = plain(r2[z2]);
+        if (/^note (globale|finale)/.test(lab)) {
+          for (var y2 = z2 + 1; y2 < r2.length; y2++) {
+            var nv = num(r2[y2]);
+            if (nv !== null) { if (fileNote === null || /famil/.test(lab)) fileNote = nv; break; }
+          }
+        }
+      }
+    }
     var h = -1, cc = 0, kc = 1, uc = 2, nc = 3;
     for (var q = 0; q < Math.min(6, rows.length) && !product; q++) {
       var rr = rows[q];
@@ -159,8 +171,20 @@ function parseWorkbook(wb) {
   if (!crits.length) throw new Error('Aucune note exploitable trouvée. Vérifiez que le fichier contient une colonne de notes de 1 à 10.');
   var usedCats = cats.filter(function (c) { return crits.some(function (k) { return k.cat === c.key; }); });
   var nsub = crits.reduce(function (n, c) { return n + c.subs.length; }, 0);
-  return { cats: usedCats, crits: crits, nsub: nsub, product: product };
+  return { cats: usedCats, crits: crits, nsub: nsub, product: product, fileNote: fileNote };
 }
+function finalScore(d) {
+  var fam = {}, order = [];
+  d.crits.forEach(function (k) {
+    if (!k.subs.length) return;
+    var a = k.subs.reduce(function (s, x) { return s + x.score; }, 0) / k.subs.length;
+    if (!fam[k.cat]) { fam[k.cat] = []; order.push(k.cat); }
+    fam[k.cat].push(a);
+  });
+  if (!order.length) return null;
+  return order.reduce(function (s, c) { return s + fam[c].reduce(function (a, b) { return a + b; }, 0) / fam[c].length; }, 0) / order.length;
+}
+function fmt2(n) { return n == null ? 'n/a' : (Math.round(n * 100) / 100).toFixed(2).replace('.', ','); }
 function splitCode(s) {
   var m = /^\s*(\d+(?:\.\d+)*)\s*[-–.):]\s*(.+)$/.exec(s);
   return m ? { code: m[1], label: m[2].trim() } : { code: '', label: s };
@@ -309,6 +333,8 @@ class Component extends DCLogic {
     base.modeHelp = detailed ? 'Chaque critère est découpé en sous-critères : toutes les notes sont tracées, sans moyenne.' : 'Un point par critère : la moyenne de ses sous-critères.';
     base.svgTitle = detailed ? 'Mode détaillé · notes des sous-critères' : 'Mode simple · moyenne par critère';
 
+    var nFile = ready.filter(function (o) { return o.s.data.fileNote != null; }).length;
+    base.scoreNote = nFile === ready.length ? 'Note finale : valeur « Note globale » lue dans chaque fichier Excel.' : (nFile === 0 ? 'Note finale calculée : moyenne des familles, chaque famille étant la moyenne de ses critères.' : 'Note finale : lue dans le fichier Excel quand elle y figure, sinon calculée (moyenne des familles).');
     var model = this.buildModel(ready);
     var vis = ready.filter(function (o) { return st.visible[o.i]; });
     base.products = ready.map(function (o) {
@@ -316,6 +342,7 @@ class Component extends DCLogic {
       return {
         name: txt(o.s.name), color: PCOL[o.i], dot: on ? PCOL[o.i] : '#ffffff', pressed: on ? 'true' : 'false',
         bg: on ? '#f4f6f7' : '#ffffff', border: on ? PCOL[o.i] : '#d5d9db', state: on ? 'affiché' : 'masqué',
+        score: fmt2(o.s.data.fileNote != null ? o.s.data.fileNote : finalScore(o.s.data)),
         toggle: function () { self.setState(function (s2) { var v = s2.visible.slice(); v[o.i] = !v[o.i]; return { visible: v }; }); }
       };
     });
@@ -530,10 +557,12 @@ class Component extends DCLogic {
   function radarView(v) {
     var o = '<div class="layout"><aside>';
     o += '<section><h2 style="font-size:18px">Produits</h2>' + each(v.products, function (p) {
-      return '<button type="button" class="prod" aria-pressed="' + p.pressed + '" style="background:' + p.bg + ';border:2px solid ' + p.border + '" data-click="' + on(p.toggle) + '">' +
+      return '<div style="display:flex;align-items:stretch;gap:8px"><button type="button" class="prod" aria-pressed="' + p.pressed + '" style="flex:1 1 auto;min-width:0;width:auto;background:' + p.bg + ';border:2px solid ' + p.border + '" data-click="' + on(p.toggle) + '">' +
         '<span class="dot" aria-hidden="true" style="background:' + p.dot + ';border-color:' + p.color + '"></span>' +
-        '<span style="flex:1 1 auto;min-width:0;overflow-wrap:anywhere">' + esc(p.name) + '</span><span style="font-weight:300;font-size:13px">' + p.state + '</span></button>';
-    }) + '</section>';
+        '<span style="flex:1 1 auto;min-width:0;overflow-wrap:anywhere">' + esc(p.name) + '</span><span style="font-weight:300;font-size:13px">' + p.state + '</span></button>' +
+        '<div style="flex:0 0 auto;min-width:76px;border-radius:10px;background:#80b0ce;border:2px solid ' + p.color + ';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 10px;color:#fff">' +
+        '<span style="font-size:11px;font-weight:300">Note finale</span><span style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">' + esc(p.score) + '</span></div></div>';
+    }) + '<p style="margin:0;font-size:13px;line-height:1.45;color:#55595b">' + esc(v.scoreNote) + '</p></section>';
     o += '<section><h2 style="font-size:18px">Affichage</h2><div class="row2">' +
       '<button type="button" class="pill" aria-pressed="' + v.simplePressed + '" style="background:' + v.simpleBg + ';color:' + v.simpleFg + '" data-click="' + on(v.setSimple) + '">Simple</button>' +
       '<button type="button" class="pill" aria-pressed="' + v.detailedPressed + '" style="background:' + v.detailedBg + ';color:' + v.detailedFg + '" data-click="' + on(v.setDetailed) + '">Détaillé</button></div>' +
