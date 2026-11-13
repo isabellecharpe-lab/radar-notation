@@ -184,6 +184,11 @@ function finalScore(d) {
   if (!order.length) return null;
   return order.reduce(function (s, c) { return s + fam[c].reduce(function (a, b) { return a + b; }, 0) / fam[c].length; }, 0) / order.length;
 }
+function tipGroup(dots, hd) {
+  return dots.filter(function (d) { return Math.abs(d.x - hd.x) <= 10 && Math.abs(d.y - hd.y) <= 10; }).map(function (d) {
+    return { bg: d.color, fg: d.color === '#55595b' ? '#ffffff' : '#000000', title: d.title, ctx: d.ctx, hasCtx: !!d.ctx, sub: d.sub };
+  });
+}
 function fmt2(n) { return n == null ? 'n/a' : (Math.round(n * 100) / 100).toFixed(2).replace('.', ','); }
 function splitCode(s) {
   var m = /^\s*(\d+(?:\.\d+)*)\s*[-–.):]\s*(.+)$/.exec(s);
@@ -324,8 +329,8 @@ class Component extends DCLogic {
       exportJpg: function () { self.doExport('jpg'); }
     };
     var detailed = st.mode === 'detailed';
-    base.setSimple = function () { self.setState({ mode: 'simple' }); };
-    base.setDetailed = function () { self.setState({ mode: 'detailed' }); };
+    base.setSimple = function () { self.setState({ mode: 'simple', hover: null }); };
+    base.setDetailed = function () { self.setState({ mode: 'detailed', hover: null }); };
     base.simplePressed = detailed ? 'false' : 'true';
     base.detailedPressed = detailed ? 'true' : 'false';
     base.simpleBg = detailed ? '#ffffff' : '#000000'; base.simpleFg = detailed ? '#000000' : '#ffffff';
@@ -343,7 +348,7 @@ class Component extends DCLogic {
         name: txt(o.s.name), color: PCOL[o.i], dot: on ? PCOL[o.i] : '#ffffff', pressed: on ? 'true' : 'false',
         bg: on ? '#f4f6f7' : '#ffffff', border: on ? PCOL[o.i] : '#d5d9db', state: on ? 'affiché' : 'masqué',
         score: fmt2(o.s.data.fileNote != null ? o.s.data.fileNote : finalScore(o.s.data)),
-        toggle: function () { self.setState(function (s2) { var v = s2.visible.slice(); v[o.i] = !v[o.i]; return { visible: v }; }); }
+        toggle: function () { self.setState(function (s2) { var v = s2.visible.slice(); v[o.i] = !v[o.i]; return { visible: v, hover: null }; }); }
       };
     });
 
@@ -417,16 +422,21 @@ class Component extends DCLogic {
         if (!detailed) {
           if (ks.avg == null) return;
           var p = pt(R * Math.min(10, Math.max(0, ks.avg)) / 10, k.a); pts.push(p);
-          dots.push({ x: f1(p[0]), y: f1(p[1]), r: 5, color: PCOL[o.i], tip: name + ' · ' + k.label + ' : ' + fmt(ks.avg) + ' / 10' });
+          dots.push({ x: f1(p[0]), y: f1(p[1]), r: 5, color: PCOL[o.i], title: (model.crits.indexOf(k) + 1) + '. ' + k.label, ctx: '', sub: name + ' · ' + fmt(ks.avg) + ' / 10', tip: name + ' · ' + k.label + ' : ' + fmt(ks.avg) + ' / 10' });
         } else {
           k.subs.forEach(function (s) {
             var v = ks.subs[s.key]; if (v == null) return;
             var p2 = pt(R * Math.min(10, Math.max(0, v)) / 10, s.a); pts.push(p2);
-            dots.push({ x: f1(p2[0]), y: f1(p2[1]), r: 4, color: PCOL[o.i], tip: name + ' · ' + (s.code ? s.code + ' ' : '') + s.label + ' : ' + fmt(v) + ' / 10' });
+            dots.push({ x: f1(p2[0]), y: f1(p2[1]), r: 4, color: PCOL[o.i], title: (s.code ? s.code + ' · ' : '') + s.label, ctx: 'Critère : ' + k.label, sub: name + ' · ' + fmt(v) + ' / 10', tip: name + ' · ' + (s.code ? s.code + ' ' : '') + s.label + ' : ' + fmt(v) + ' / 10' });
           });
         }
       });
       if (pts.length > 1) shapes.push({ points: pts.map(function (p) { return f1(p[0]) + ',' + f1(p[1]); }).join(' '), color: PCOL[o.i], fill: PFILL[o.i] });
+    });
+    dots.forEach(function (d, di) {
+      if (st.hover === di) d.r = d.r + 2;
+      d.enter = function () { if (self.state.hover !== di) self.setState({ hover: di }); };
+      d.leave = function () { if (self.state.hover === di) self.setState({ hover: null }); };
     });
     base.shapes = shapes; base.dots = dots;
 
@@ -472,6 +482,16 @@ class Component extends DCLogic {
     base.legLight = lt.filter(function (o) { return o.size === 14; }).map(function (o) { return { x: o.x, y: o.y, t: o.t }; });
     base.svgH = Math.ceil(ly + 6);
     this.svgH = base.svgH;
+    var hd = (st.hover != null && dots[st.hover]) ? dots[st.hover] : null;
+    base.hasTip = !!hd;
+    if (hd) {
+      var lp = hd.x / 1040 * 100, tp = hd.y / base.svgH * 100;
+      var tx = lp > 72 ? '-100%' : (lp < 28 ? '0%' : '-50%');
+      var ty = hd.y < 190 ? '16px' : 'calc(-100% - 16px)';
+      base.tip = { left: f1(lp), top: f1(tp), tf: 'translate(' + tx + ', ' + ty + ')', items: tipGroup(dots, hd) };
+    } else {
+      base.tip = { left: 0, top: 0, tf: 'none', items: [] };
+    }
     base.radarAria = 'Radar à ' + model.crits.length + ' axes, ' + (detailed ? 'notes par sous-critère' : 'moyenne par critère') + ', produits affichés : ' + (vis.map(function (o) { return txt(o.s.name); }).join(', ') || 'aucun');
 
     base.cols = 'minmax(220px, 1fr) repeat(' + Math.max(1, vis.length) + ', minmax(72px, 110px))';
@@ -500,7 +520,7 @@ class Component extends DCLogic {
 (function () {
   var app = document.getElementById('app');
   var comp = new Component({});
-  var H = [];
+  var H = [], lastDots = [], lastH = 930;
   function on(fn) { H.push(fn); return H.length - 1; }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function each(list, f) { return (list || []).map(f).join(''); }
@@ -545,7 +565,8 @@ class Component extends DCLogic {
     o += each(v.ringLabels, function (t) { return '<text x="' + t.x + '" y="' + t.y + '" fill="#55595b" font-size="12" font-weight="400">' + esc(t.t) + '</text>'; });
     o += each(v.subTicks, function (t) { return '<text x="' + t.x + '" y="' + t.y + '" fill="#55595b" font-size="10" font-weight="400" text-anchor="middle" dominant-baseline="central"><title>' + esc(t.full) + '</title>' + esc(t.t) + '</text>'; });
     o += each(v.shapes, function (s) { return '<polygon points="' + s.points + '" fill="' + s.fill + '" stroke="' + s.color + '" stroke-width="2.5" stroke-linejoin="round"/>'; });
-    o += each(v.dots, function (d) { return '<circle cx="' + d.x + '" cy="' + d.y + '" r="' + d.r + '" fill="' + d.color + '" stroke="#ffffff" stroke-width="1.5"><title>' + esc(d.tip) + '</title></circle>'; });
+    lastDots = v.dots || []; lastH = v.svgH;
+    o += each(v.dots, function (d, di) { return '<circle class="vis-dot" data-vis="' + di + '" cx="' + d.x + '" cy="' + d.y + '" r="' + d.r + '" fill="' + d.color + '" stroke="#ffffff" stroke-width="1.5"/><circle data-dot="' + di + '" cx="' + d.x + '" cy="' + d.y + '" r="12" fill="transparent" style="cursor:pointer"/>'; });
     o += each(v.critLines, function (c) { return '<text x="' + c.x + '" y="' + c.y + '" fill="#000000" font-size="15" font-weight="400" text-anchor="' + c.anchor + '">' + esc(c.t) + '</text>'; });
     o += '<line x1="32" y1="' + v.sepY + '" x2="1008" y2="' + v.sepY + '" stroke="#d5d9db" stroke-width="1"/>';
     o += each(v.legendRects, function (g) { return '<rect x="' + g.x + '" y="' + g.y + '" width="16" height="16" rx="' + g.rx + '" fill="' + g.fill + '" stroke="' + g.stroke + '" stroke-width="2"/>'; });
@@ -570,7 +591,7 @@ class Component extends DCLogic {
     o += '<section><h2 style="font-size:18px">Télécharger le visuel</h2><div class="row2">' +
       '<button type="button" class="sq" data-click="' + on(v.exportPng) + '">PNG</button><button type="button" class="sq" data-click="' + on(v.exportJpg) + '">JPEG</button></div></section>';
     o += '<button type="button" class="link" data-click="' + on(v.goUpload) + '">Modifier les fichiers</button></aside>';
-    o += '<main class="radar"><div class="panel">' + svgView(v) + '</div>';
+    o += '<main class="radar"><div class="panel"><div style="position:relative">' + svgView(v) + '<div id="tip" role="tooltip" style="display:none;position:absolute;pointer-events:none;width:max-content;max-width:300px;flex-direction:column;gap:6px;z-index:5"></div></div></div>';
     o += '<div class="panel tablep"><h2 style="font-size:20px">Détail des notes</h2><div style="overflow-x:auto"><div style="min-width:520px;display:flex;flex-direction:column">';
     o += '<div class="grid" style="grid-template-columns:' + v.cols + ';padding:8px 0;border-bottom:2px solid #000"><span style="font-weight:400;font-size:14px;color:#55595b">Catégorie · critère · sous-critère</span>' +
       each(v.headCells, function (h) { return '<span style="font-weight:400;font-size:14px;display:flex;justify-content:flex-end;align-items:center;gap:6px;overflow-wrap:anywhere"><span aria-hidden="true" style="flex:0 0 auto;width:10px;height:10px;border-radius:50%;background:' + h.color + '"></span>' + esc(h.name) + '</span>'; }) + '</div>';
@@ -608,6 +629,25 @@ class Component extends DCLogic {
   app.addEventListener('click', function (e) { var t = e.target.closest('[data-click]'); if (t && !t.disabled) H[+t.getAttribute('data-click')](e); });
   app.addEventListener('input', function (e) { var a = e.target.getAttribute('data-input'); if (a != null) H[+a](e); });
   app.addEventListener('change', function (e) { var a = e.target.getAttribute('data-change'); if (a != null) H[+a](e); });
+  function hideTip() { var t = document.getElementById('tip'); if (t) t.style.display = 'none'; app.querySelectorAll('.vis-dot.hot').forEach(function (c) { c.classList.remove('hot'); c.setAttribute('r', c.getAttribute('data-r')); }); }
+  app.addEventListener('mouseover', function (e) {
+    var c = e.target.closest && e.target.closest('[data-dot]');
+    if (!c) { hideTip(); return; }
+    var i = +c.getAttribute('data-dot'), d = lastDots[i], t = document.getElementById('tip');
+    if (!d || !t) return;
+    hideTip();
+    var vd = app.querySelector('[data-vis="' + i + '"]');
+    if (vd) { vd.setAttribute('data-r', vd.getAttribute('r')); vd.setAttribute('r', d.r + 2); vd.classList.add('hot'); }
+    var lp = d.x / 1040 * 100, tp = d.y / lastH * 100;
+    t.innerHTML = tipGroup(lastDots, d).map(function (g) {
+      return '<div style="background:' + g.bg + ';color:' + g.fg + ';border-radius:8px;padding:10px 14px;box-shadow:0 4px 14px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:3px">' +
+        '<span style="font-weight:700;font-size:14px;line-height:1.35">' + esc(g.title) + '</span>' + (g.ctx ? '<span style="font-weight:300;font-size:13px;line-height:1.35">' + esc(g.ctx) + '</span>' : '') + '<span style="font-weight:400;font-size:13px;line-height:1.35">' + esc(g.sub) + '</span></div>';
+    }).join('');
+    t.style.left = lp + '%'; t.style.top = tp + '%';
+    t.style.transform = 'translate(' + (lp > 72 ? '-100%' : (lp < 28 ? '0%' : '-50%')) + ',' + (d.y < 190 ? '16px' : 'calc(-100% - 16px)') + ')';
+    t.style.display = 'flex';
+  });
+  app.addEventListener('mouseleave', hideTip);
   comp.__render = render;
   render();
 })();
